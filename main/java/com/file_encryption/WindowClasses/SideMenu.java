@@ -1,6 +1,7 @@
 package com.file_encryption.WindowClasses;
 
 import com.file_encryption.EncryptionStuff.Encryptor;
+import com.file_encryption.EncryptionStuff.FolderEncryptor;
 import com.file_encryption.Exceptions.BadKeyException;
 import com.file_encryption.Exceptions.IllegalEncryptionMode;
 import com.file_encryption.Exceptions.InvalidFileName;
@@ -24,6 +25,7 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 import java.util.HashMap;
+import java.util.Objects;
 
 public class SideMenu {
 
@@ -53,8 +55,8 @@ public class SideMenu {
             File file = new File(selectedFile.getText());
             if (global.mode.get()==1)
                 encryptDecryptFile.setText("encrypt "+Utils.workOutMode(file).split(" ")[1]);
-            else if (global.mode.get()==0)
-                encryptDecryptFile.setText("encrypt "+Utils.workOutMode(file).split(" ")[1]);
+            else if (global.mode.get()==2)
+                encryptDecryptFile.setText("decrypt "+Utils.workOutMode(file).split(" ")[1]);
             else
                 encryptDecryptFile.setText(Utils.workOutMode(file));
             if (file.exists()) {
@@ -75,28 +77,55 @@ public class SideMenu {
                     encryptMode = fileEncrypted;
                 } else if (global.mode.get()==1) encryptMode = true;
                 else if (!Utils.verifyFile(global.currentlySelectedFile)) {
-                    MessageBox.showError("this file isn't encrypted!",false,global);
+                    MessageBox.showError("this file isn't encrypted! (maybe a different program encrypted it?)",false,global);
                     return;
                 }
                 byte[] key = EncryptionKeyWindow.getKeyWindow(encryptMode, global.currentlySelectedFile, global);
                 if (key==null) return;
-                Encryptor encryptor = new Encryptor(global.currentlySelectedFile,global);
-                global.currentlySelectedFile = encryptor.init(key,encryptMode?"encrypt":"decrypt");
+                boolean file = true;
+                if (global.currentlySelectedFile.isFile()) {
+                    Encryptor encryptor = new Encryptor(global.currentlySelectedFile, global);
+                    global.currentlySelectedFile = encryptor.init(key, encryptMode ? "encrypt" : "decrypt");
+                } else if (global.currentlySelectedFile.isDirectory()) {
+                    file = false;
+                    File errorsFolder = new File(global.currentlySelectedFile.getParent()+"encryptionErrorsFolder");
+                    int count = 0;
+                    while (!errorsFolder.mkdir()) {
+                        errorsFolder = new File(global.currentlySelectedFile.getParent()+"encryptionErrorsFolder("+(++count)+")");
+                        if (count>1000) {
+                            MessageBox.showError("error creating encryption errors folder!",false,global);
+                            return;
+                        }
+                    }
+                    global.currentlySelectedFile = FolderEncryptor.encryptFolder(global.currentlySelectedFile,errorsFolder,key);
+                    if (errorsFolder.listFiles().length==0) {
+                        count = 0;
+                        while (!errorsFolder.delete()) {
+                            if (count++>3) {
+                                MessageBox.showError("unused errors folder deletion failed! (you may want to manually delete it at '"+errorsFolder.getAbsolutePath()+"')",false,global);
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    MessageBox.showError("file doesn't appear to exist, well done in breaking this, it would be helpful to me if you would contact me and tell me the steps you took to do this so I can fix it.",false,global);
+                    return;
+                }
+                key = null;
+                System.gc();
                 selectedFile.setText(global.currentlySelectedFile.getAbsolutePath());
-                if (encryptMode) selectedFile.setText(Utils.replaceFileExtension(selectedFile.getText(),"secure"));
-                else selectedFile.setText(Utils.replaceFileExtension(selectedFile.getText(),global.currentlySelectedFile.getName().split("\\.")[1]));
                 encryptDecryptFile.setText(Utils.workOutMode(global.currentlySelectedFile));
                 if (global.mode.get()!=0) {
                     mode.setText(Utils.workOutMode(global.currentlySelectedFile).split(" ")[0] + " mode");
                     global.mode.set(Utils.workOutMode(global.currentlySelectedFile).split(" ")[0].equals("encrypt") ? 1 : 2);
                 }
                 browseFolders.setDisable(global.mode.get() == 2);
-                System.out.println(Utils.workOutMode(global.currentlySelectedFile).split(" ")[0].equals("encrypt"));
-            } catch (IOException ignored) {
-                MessageBox.showError("error "+mode.getText().split(" ")[0]+"ing file",false,global);
+            } catch (IOException error) {
+                MessageBox.showError("error "+String.join("ing ",Utils.workOutMode(global.currentlySelectedFile).split(" "))+"\nerror: "+error.getMessage(),false,global);
             } catch (InvalidKeyException | BadKeyException ignored) {
                 MessageBox.showError("invalid key",false,global);
             } catch (InvalidAlgorithmParameterException | NoSuchAlgorithmException | BadPaddingException | InvalidKeySpecException | InvalidFileName | IllegalEncryptionMode | NoSuchPaddingException | IllegalBlockSizeException ex) {
+                MessageBox.showError("an error occurred!\nerror: "+ex.getMessage(),false,global);
                 ex.printStackTrace();
             }
         });
@@ -146,6 +175,7 @@ public class SideMenu {
             if (folder.exists()) {
                 if (global.mode.get()==0)
                     encryptDecryptFile.setText(Utils.workOutMode(folder));
+                else encryptDecryptFile.setText(modeTextKey.get(global.mode.get())+" folder");
                 encryptDecryptFile.setDisable(false);
             }
         });
