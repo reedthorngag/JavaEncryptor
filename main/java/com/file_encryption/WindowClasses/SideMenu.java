@@ -106,6 +106,8 @@ public class SideMenu {
                                 break;
                             }
                         }
+                    } else {
+                        MessageBox.showError("not all files in the folder encrypted successfully! files that failed have been moved to '"+errorsFolder.getAbsolutePath()+"'.",false,global);
                     }
                 } else {
                     MessageBox.showError("file doesn't appear to exist, well done in breaking this, it would be helpful to me if you would contact me and tell me the steps you took to do this so I can fix it.",false,global);
